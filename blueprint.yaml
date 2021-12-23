@@ -1,0 +1,60 @@
+tosca_definitions_version: cloudify_dsl_1_3
+
+description: >
+  This blueprint creates infrastructure on AWS using Terraform.
+
+imports:
+  - http://cloudify.co/spec/cloudify/5.1.0/types.yaml
+  - plugin:cloudify-terraform-plugin
+
+inputs:
+  terraform_installation_source:
+    description: >
+      Where to get Terraform from.
+    type: string
+    default: 'https://releases.hashicorp.com/terraform/0.13.3/terraform_0.13.3_linux_amd64.zip'
+  terraform_plugins:
+    type: dict
+    default:
+      registry.terraform.io/hashicorp/null/2.1.2/linux_amd64: 'https://releases.hashicorp.com/terraform-provider-null/2.1.2/terraform-provider-null_2.1.2_linux_amd64.zip'
+  module_source:
+    type: string
+    default: 'local.zip'
+  admin_user:
+    description: >
+      The admin user name for the created VM.
+    type: string
+    default: 'centos'
+
+node_templates:
+  terraform:
+    type: cloudify.nodes.terraform
+    properties:
+      resource_config:
+        use_existing_resource: false
+        installation_source: { get_input: terraform_installation_source }
+        plugins: { get_input: terraform_plugins }
+
+  cloud_resources:
+    type: cloudify.nodes.terraform.Module
+    properties:
+      resource_config:
+        variables:
+          admin_user: { get_input: admin_user }
+        source: 
+          location: { get_input: module_source }
+    relationships:
+      - target: terraform
+        type: cloudify.terraform.relationships.run_on_host
+
+capabilities:
+  name:
+    value: { get_attribute: [ cloud_resources, resources, example_vm, instances, 0, attributes, tags, Name ] }
+
+  endpoint:
+    description: The external endpoint of the application.
+    value: { get_attribute: [ cloud_resources, resources, eip, instances, 0, attributes, public_ip ] }
+
+  user:
+    description: user ID.
+    value: { get_input: admin_user }
